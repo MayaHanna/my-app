@@ -1,7 +1,8 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import './App.css';
 import { LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import DatePicker from 'react-date-picker';
+import LRUCache from 'lru-cache';
 
 interface Rate {
   value: number;
@@ -14,12 +15,24 @@ function App() {
   const [endDate, setEndDate] = useState<Date>();
   const [startDate, setStartDate] = useState<Date>();
 
+  const cache = new LRUCache({ //Cache doesn't work
+    max: 500 
+  });
+
   const enableFetching = endDate && startDate && startDate < endDate && (endDate.getTime() - startDate.getTime()) <= 1000 * 60 * 60 * 24 * 14;
 
   async function fetchData(date: Date):Promise<Rate>{
     const dateAsISO = date.toISOString().split("T")[0];
+    const valueFromCache = cache.get(dateAsISO); 
+    if(valueFromCache){
+      console.log(dateAsISO + " found in cache");
+      return {value: valueFromCache as number, date: dateAsISO};
+    }
+
     const rawData = await (await fetch(`https://openexchangerates.org/api/historical/${dateAsISO}.json?app_id=dc971481899445898f79d05116d52967`)).json();
     const rate: Rate = {value: rawData.rates["ILS"], date: dateAsISO};
+    cache.set(rate.date, rate.value);
+    console.log(dateAsISO + " saved in cache");
     return rate;
   }
 
@@ -27,7 +40,6 @@ function App() {
     const currentDate = new Date();
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(currentDate.getDate() - 14);
-
     setStartDate(twoWeeksAgo);
     setEndDate(currentDate);
   },[]);
